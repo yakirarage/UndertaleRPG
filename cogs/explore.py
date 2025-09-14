@@ -475,11 +475,13 @@ async def BossBattle(
         if new_gold < 0:
             new_gold = 0
         deaths = data["deaths"] + 1
+        health = data["level"] * 2 / 0.5 + 20
         info = {
             "in_fight": False,
             "deaths": deaths,
             "gold": new_gold,
-            "health": 20,
+            "health": health,
+            # "health": 20,
             "fight_monster": "",
             "fight_hp": 0,
             "fight_atk": 0,
@@ -612,11 +614,13 @@ async def Battle(
         if new_gold < 0:
             new_gold = 0
         deaths = data["deaths"] + 1
+        health = data["level"] * 2 / 0.5 + 20
         info = {
             "in_fight": False,
             "deaths": deaths,
             "gold": new_gold,
-            "health": 20,
+            "health": health,
+            # "health": 20,
             "fight_monster": "",
             "fight_hp": 0,
             "fight_atk": 0,
