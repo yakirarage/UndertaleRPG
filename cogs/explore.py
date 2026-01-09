@@ -9,7 +9,78 @@ from main import UndertaleBot
 
 from utility.dataIO import fileIO
 from utility.utils import ConsoleColors, create_player_info, in_battle
-from utility.constants import BLUE,GOLD,EXP
+from utility.constants import BLUE, GOLD, EXP
+
+
+# --- Helper functions --------------------------------------------------------
+
+
+def calculate_damage(attacker_dmg: int, defender_def: int) -> int:
+    """
+    Simple damage formula: attacker damage minus defender defence,
+    but never less than 1.
+    """
+    return max(1, attacker_dmg - defender_def)
+
+
+def apply_mutation(monster_data: dict) -> dict:
+    """
+    Applies a random mutation to a monster with a small chance.
+    Returns a mutated copy of the monster data, without modifying the original.
+    """
+    mutated = monster_data.copy()
+
+    MUTATIONS = {
+        "Armored": {"defence_mult": 1.3, "description": "Has tougher defence."},
+        "Fragile": {
+            "hp_mult": 0.7,
+            "attack_mult": 1.4,
+            "description": "Lower HP but stronger attacks.",
+        },
+        "Chaotic": {
+            "chaotic": True,
+            "description": "Unpredictable attack patterns.",
+        },
+        "Regenerator": {
+            "regen": 5,
+            "description": "Regenerates HP over time.",
+        },
+        "Lucky": {
+            "extra_rewards": True,
+            "description": "Drops extra rewards.",
+        },
+    }
+
+    # 15% chance to mutate
+    if random.random() < 0.15:
+        mutation_name = random.choice(list(MUTATIONS.keys()))
+        mutation = MUTATIONS[mutation_name]
+
+        mutated["mutation"] = mutation_name
+        mutated["mutation_description"] = mutation.get("description", "")
+
+        # Apply stat multipliers if present
+        if "hp_mult" in mutation:
+            mutated["hp"] = int(mutated.get("hp", 1) * mutation["hp_mult"])
+        if "attack_mult" in mutation:
+            mutated["attack"] = int(mutated.get("attack", 1) * mutation["attack_mult"])
+        if "defence_mult" in mutation:
+            mutated["defence"] = int(
+                mutated.get("defence", 1) * mutation["defence_mult"]
+            )
+
+        # Special flags (kept simple; you can expand logic later)
+        if "regen" in mutation:
+            mutated["regen"] = mutation["regen"]
+        if "chaotic" in mutation:
+            mutated["chaotic"] = True
+        if "extra_rewards" in mutation:
+            mutated["extra_rewards"] = True
+
+    return mutated
+
+
+# --- UI views ----------------------------------------------------------------
 
 
 class TravelButton(disnake.ui.View):
@@ -76,7 +147,6 @@ class Choice(disnake.ui.View):
 
         self.choice = True
         await inter.response.defer()
-
         await inter.edit_original_message(components=[])
         self.stop()
 
@@ -86,9 +156,7 @@ class Choice(disnake.ui.View):
             return await inter.send("This is not yours kiddo!", ephemeral=True)
 
         self.choice = False
-
         await inter.response.defer()
-
         await inter.edit_original_message(components=[])
         self.stop()
 
@@ -115,20 +183,20 @@ class BossButton(disnake.ui.View):
     async def fight(self, button: disnake.ui.Button, inter: disnake.MessageInteraction):
         await inter.response.defer()
         data = await inter.bot.players.find_one({"_id": inter.author.id})
-        armor = await inter.bot.armor.find_one({"_id": data["armor"]})
-        weapon = await inter.bot.weapons.find_one({"_id": data["weapon"]})
         monsters = fileIO("./data/bosses.json", "load")
         monster = data["fight_monster"]
-        # player stats
         location = data["location"]
+
+        # Player stats
         user_hp = data["health"]
         user_atk = data["attack"]
         user_def = data["defence"]
-        # monster stats
+
+        # Monster stats (use current fight_* values, already set when fight started)
         enemy_title = monsters[location][monster]["title"]
         enemy_hp = data["fight_hp"]
-        enemy_atk = monsters[location][monster]["attack"]
-        enemy_def = monsters[location][monster]["defence"]
+        enemy_atk = data["fight_atk"]
+        enemy_def = data["fight_def"]
 
         gold_min = monsters[location][monster]["gold_min"]
         gold_max = monsters[location][monster]["gold_max"]
@@ -162,12 +230,13 @@ class BossButton(disnake.ui.View):
         location = data["location"]
         monsters = fileIO("./data/bosses.json", "load")
         monster = data["fight_monster"]
-        # player stats
-        location = data["location"]
+
+        # Player stats
         user_hp = data["health"]
         user_atk = data["attack"]
         user_def = data["defence"]
-        # monster stats
+
+        # Monster stats (original, not mutated, for the second phase)
         enemy_title = monsters[location][monster]["title"]
         enemy_hp = monsters[location][monster]["hp"]
         enemy_atk = monsters[location][monster]["attack"]
@@ -196,7 +265,7 @@ class BossButton(disnake.ui.View):
                 url="https://cdn.discordapp.com/attachments/900274624594575361/1032089003912089770/3abaf892f9a10b66e7341589a9b6d210.jpg"
             )
             await inter.edit_original_message(embed=embed, view=None)
-            spares = data["spares"] = +1
+            spares = data["spares"] + 1
             info = {
                 "in_fight": False,
                 "fight_monster": "",
@@ -248,20 +317,20 @@ class ExploreButton(disnake.ui.View):
     async def fight(self, button: disnake.ui.Button, inter: disnake.MessageInteraction):
         await inter.response.defer()
         data = await inter.bot.players.find_one({"_id": inter.author.id})
-        armor = await inter.bot.armor.find_one({"_id": data["armor"]})
-        weapon = await inter.bot.weapons.find_one({"_id": data["weapon"]})
         monsters = fileIO("./data/monsters.json", "load")
         monster = data["fight_monster"]
-        # player stats
         location = data["location"]
+
+        # Player stats
         user_hp = data["health"]
         user_atk = data["attack"]
         user_def = data["defence"]
-        # monster stats
+
+        # Monster stats (current fight state)
         enemy_title = monsters[location][monster]["title"]
         enemy_hp = data["fight_hp"]
-        enemy_atk = monsters[location][monster]["attack"]
-        enemy_def = monsters[location][monster]["defence"]
+        enemy_atk = data["fight_atk"]
+        enemy_def = data["fight_def"]
 
         gold_min = monsters[location][monster]["gold_min"]
         gold_max = monsters[location][monster]["gold_max"]
@@ -284,7 +353,7 @@ class ExploreButton(disnake.ui.View):
 
     @disnake.ui.button(label="Use", style=disnake.ButtonStyle.gray, disabled=True)
     async def use(self, button: disnake.ui.button, inter: disnake.MessageInteraction):
-       await inter.response.defer()
+        await inter.response.defer()
 
     @disnake.ui.button(label="Mercy", style=disnake.ButtonStyle.green)
     async def mercy(self, button: disnake.ui.button, inter: disnake.MessageInteraction):
@@ -295,12 +364,13 @@ class ExploreButton(disnake.ui.View):
         location = data["location"]
         monsters = fileIO("./data/monsters.json", "load")
         monster = data["fight_monster"]
-        # player stats
-        location = data["location"]
+
+        # Player stats
         user_hp = data["health"]
         user_atk = data["attack"]
         user_def = data["defence"]
-        # monster stats
+
+        # Monster stats (original, not mutated, for restart)
         enemy_title = monsters[location][monster]["title"]
         enemy_hp = monsters[location][monster]["hp"]
         enemy_atk = monsters[location][monster]["attack"]
@@ -372,6 +442,9 @@ class ExploreButton(disnake.ui.View):
         )
 
 
+# --- Battle logic ------------------------------------------------------------
+
+
 async def BossBattle(
     self,
     inter: disnake.MessageInteraction,
@@ -389,12 +462,17 @@ async def BossBattle(
     view = BossButton()
     loading = Loading()
     data = await inter.bot.players.find_one({"_id": inter.author.id})
-    armor = await inter.bot.armor.find_one({"_id": data["armor"]})
     weapon = await inter.bot.weapons.find_one({"_id": data["weapon"]})
 
+    # Player attack: base + random weapon range
     custom_user_atk = user_atk + random.randint(weapon["min_dmg"], weapon["max_dmg"])
-    new_user_hp = user_hp - enemy_atk
-    new_enemy_hp = enemy_hp - custom_user_atk
+
+    # Apply defence to damage calculations
+    damage_to_enemy = calculate_damage(custom_user_atk, enemy_def)
+    damage_to_user = calculate_damage(enemy_atk, user_def)
+
+    new_user_hp = user_hp - damage_to_user
+    new_enemy_hp = enemy_hp - damage_to_enemy
 
     embed = disnake.Embed(
         title=f"You damaged {monster}",
@@ -466,7 +544,6 @@ async def BossBattle(
 
     if new_user_hp <= 0:
         location = data["location"]
-        monsters = fileIO("./data/bosses.json", "load")
         embed = disnake.Embed(
             title="You died!", color=BLUE, description=f"You lost **{gold_min}** {GOLD}"
         )
@@ -481,7 +558,6 @@ async def BossBattle(
             "deaths": deaths,
             "gold": new_gold,
             "health": health,
-            # "health": 20,
             "fight_monster": "",
             "fight_hp": 0,
             "fight_atk": 0,
@@ -503,7 +579,9 @@ async def BossBattle(
         name=f"{inter.author.name}'s stats",
         value=f"**HP:** {new_user_hp}\n**Attack:** {user_atk} (base damage)\n**Defence:** {user_def}",
     )
-    embed.set_footer(text="with each hit a random amount of damage is added to your base damage depending on your weapon")
+    embed.set_footer(
+        text="with each hit a random amount of damage is added to your base damage depending on your weapon"
+    )
     await inter.edit_original_message(embed=embed, view=view)
     info = {
         "health": new_user_hp,
@@ -531,12 +609,17 @@ async def Battle(
     view = ExploreButton()
     loading = Loading()
     data = await inter.bot.players.find_one({"_id": inter.author.id})
-    armor = await inter.bot.armor.find_one({"_id": data["armor"]})
     weapon = await inter.bot.weapons.find_one({"_id": data["weapon"]})
 
+    # Player attack: base + random weapon damage
     custom_user_atk = user_atk + random.randint(weapon["min_dmg"], weapon["max_dmg"])
-    new_user_hp = user_hp - enemy_atk
-    new_enemy_hp = enemy_hp - custom_user_atk
+
+    # Apply defence to damage calculations
+    damage_to_enemy = calculate_damage(custom_user_atk, enemy_def)
+    damage_to_user = calculate_damage(enemy_atk, user_def)
+
+    new_user_hp = user_hp - damage_to_user
+    new_enemy_hp = enemy_hp - damage_to_enemy
 
     embed = disnake.Embed(
         title=f"You damaged {monster}",
@@ -605,7 +688,6 @@ async def Battle(
 
     if new_user_hp <= 0:
         location = data["location"]
-        monsters = fileIO("./data/monsters.json", "load")
         embed = disnake.Embed(
             title="You died!", color=BLUE, description=f"You lost **{gold_min}** {GOLD}"
         )
@@ -620,7 +702,6 @@ async def Battle(
             "deaths": deaths,
             "gold": new_gold,
             "health": health,
-            # "health": 20,
             "fight_monster": "",
             "fight_hp": 0,
             "fight_atk": 0,
@@ -642,7 +723,9 @@ async def Battle(
         name=f"{inter.author.name}'s stats",
         value=f"**HP:** {new_user_hp}\n**Attack:** {user_atk} (base damage)\n**Defence:** {user_def}",
     )
-    embed.set_footer(text="with each hit a random amount of damage is added to your base damage depending on your weapon")
+    embed.set_footer(
+        text="with each hit a random amount of damage is added to your base damage depending on your weapon"
+    )
     await inter.edit_original_message(embed=embed, view=view)
     info = {
         "health": new_user_hp,
@@ -651,6 +734,9 @@ async def Battle(
         "fight_def": enemy_def,
     }
     await inter.bot.players.update_one({"_id": inter.author.id}, {"$set": info})
+
+
+# --- Level up & commands -----------------------------------------------------
 
 
 async def levelup_check(self, inter: disnake.MessageInteraction):
@@ -700,41 +786,51 @@ class Explore(commands.Cog):
         await create_player_info(inter, inter.author)
         data = await inter.bot.players.find_one({"_id": inter.author.id})
         location = data["location"]
-        if data[f"{location}_boss"] == True:
+        if data[f"{location}_boss"] is True:
             return await inter.send("You already killed the boss of this location.")
 
         monsters = fileIO("./data/bosses.json", "load")
-        random_monster = []
-
-        for i in monsters[location]:
-            random_monster.append(i)
-
+        random_monster = [m for m in monsters[location]]
         monster = random.choice(random_monster)
-        # player stats
-        location = data["location"]
+
+        # Player stats
         user_hp = data["health"]
         user_atk = data["attack"]
         user_def = data["defence"]
 
-        # monster stats
-        enemy_title = monsters[location][monster]["title"]
-        enemy_hp = monsters[location][monster]["hp"]
-        enemy_atk = monsters[location][monster]["attack"]
-        enemy_def = monsters[location][monster]["defence"]
+        # Monster stats (with mutation)
+        base_monster = monsters[location][monster]
+        mutated = apply_mutation(base_monster)
+
+        enemy_title = mutated["title"]
+        enemy_hp = mutated["hp"]
+        enemy_atk = mutated["attack"]
+        enemy_def = mutated["defence"]
 
         embed = disnake.Embed(
             title=enemy_title, description=f"**Location:** {location}", color=BLUE
         )
         embed.set_thumbnail(url=inter.author.avatar)
+
+        mutation = mutated.get("mutation")
+        mutation_desc = mutated.get("mutation_description")
+        mutation_text = ""
+        if mutation:
+            mutation_text = f"\n⚠️ Mutation: **{mutation}**"
+            if mutation_desc:
+                mutation_text += f" – {mutation_desc}"
+
         embed.add_field(
             name=f"{monster}'s stats",
-            value=f"**HP:** {enemy_hp}\n**Attack:** {enemy_atk}\n**Defence:** {enemy_def}",
+            value=f"**HP:** {enemy_hp}\n**Attack:** {enemy_atk}\n**Defence:** {enemy_def}{mutation_text}",
         )
         embed.add_field(
             name=f"{inter.author.name}'s stats",
             value=f"**HP:** {user_hp}\n**Attack:** {user_atk} (base damage)\n**Defence:** {user_def}",
         )
-        embed.set_footer(text="with each hit a random amount of damage is added to your base damage depending on your weapon")
+        embed.set_footer(
+            text="with each hit a random amount of damage is added to your base damage depending on your weapon"
+        )
         view = BossButton()
         await inter.send(embed=embed, view=view)
         info = {
@@ -761,36 +857,34 @@ class Explore(commands.Cog):
         item = random.choices(choices, weights=(90, 10, 10, 5), k=1)
 
         data = await inter.bot.players.find_one({"_id": inter.author.id})
-        armor = await inter.bot.armor.find_one({"_id": data["armor"]})
-        weapon = await inter.bot.weapons.find_one({"_id": data["weapon"]})
         await inter.response.defer()
 
         if item[0] == "fight":
             location = data["location"]
             monsters = fileIO("./data/monsters.json", "load")
 
-            random_monster = []
-
-            for i in monsters[location]:
-                random_monster.append(i)
+            random_monster = [m for m in monsters[location]]
 
             if len(random_monster) == 0:
                 return await inter.send(
-                    f"There are no monsters here? You are for sure inside a /boss area only!"
+                    "There are no monsters here? You are for sure inside a /boss area only!"
                 )
 
             monster = random.choice(random_monster)
-            # player stats
-            location = data["location"]
+
+            # Player stats
             user_hp = data["health"]
             user_atk = data["attack"]
             user_def = data["defence"]
 
-            # monster stats
-            enemy_title = monsters[location][monster]["title"]
-            enemy_hp = monsters[location][monster]["hp"]
-            enemy_atk = monsters[location][monster]["attack"]
-            enemy_def = monsters[location][monster]["defence"]
+            # Monster stats (with mutation)
+            base_monster = monsters[location][monster]
+            mutated = apply_mutation(base_monster)
+
+            enemy_title = mutated["title"]
+            enemy_hp = mutated["hp"]
+            enemy_atk = mutated["attack"]
+            enemy_def = mutated["defence"]
 
             embed = disnake.Embed(
                 title=enemy_title,
@@ -798,15 +892,26 @@ class Explore(commands.Cog):
                 color=BLUE,
             )
             embed.set_thumbnail(url=inter.author.avatar)
+
+            mutation = mutated.get("mutation")
+            mutation_desc = mutated.get("mutation_description")
+            mutation_text = ""
+            if mutation:
+                mutation_text = f"\n⚠️ Mutation: **{mutation}**"
+                if mutation_desc:
+                    mutation_text += f" – {mutation_desc}"
+
             embed.add_field(
                 name=f"{monster}'s stats",
-                value=f"**HP:** {enemy_hp}\n**Attack:** {enemy_atk}\n**Defence:** {enemy_def}",
+                value=f"**HP:** {enemy_hp}\n**Attack:** {enemy_atk}\n**Defence:** {enemy_def}{mutation_text}",
             )
             embed.add_field(
                 name=f"{inter.author.name}'s stats",
                 value=f"**HP:** {user_hp}\n**Attack:** {user_atk} (base damage)\n**Defence:** {user_def}",
             )
-            embed.set_footer(text="with each hit a random amount of damage is added to your base damage depending on your weapon")
+            embed.set_footer(
+                text="with each hit a random amount of damage is added to your base damage depending on your weapon"
+            )
             view = ExploreButton()
             await inter.send(embed=embed, view=view, ephemeral=True)
             info = {
@@ -826,7 +931,7 @@ class Explore(commands.Cog):
         if item[0] == "gold":
             found_gold = random.randint(150, 250)
             new_gold = data["gold"] + found_gold
-            data["gold"] += found_gold
+            data["gold"] = new_gold
             await self.bot.players.update_one({"_id": inter.author.id}, {"$set": data})
             await inter.send(
                 content=f"You found `{found_gold}`**G**! you now have `{round(new_gold)}`**G**",
@@ -960,7 +1065,7 @@ class Explore(commands.Cog):
 
         if locations[view.value]["level"] > level:
             return await inter.edit_original_message(
-                content=f"Your level is too low to travel there!",
+                content="Your level is too low to travel there!",
                 embed=None,
                 components=[],
             )
@@ -986,26 +1091,38 @@ class Explore(commands.Cog):
 
     @commands.slash_command()
     @commands.cooldown(1, 12, commands.BucketType.user)
-    async def leaderboard(self, inter: disnake.ApplicationCommandInteraction, leaderboard: str = commands.Param(name="leaderboard", choices=["gold", "exp", "resets", "kills", "spares", "deaths", "level"])):
+    async def leaderboard(
+        self,
+        inter: disnake.ApplicationCommandInteraction,
+        leaderboard: str = commands.Param(
+            name="leaderboard",
+            choices=["gold", "exp", "resets", "kills", "spares", "deaths", "level"],
+        ),
+    ):
         """View the top 10 players on specifc stats"""
         await inter.response.defer()
 
         file = disnake.File("./images/trophy.png", filename="trophy.png")
         file_2 = disnake.File("./images/leaderboard.png", filename="leaderboard.png")
 
-        if leaderboard not in ["gold", "exp", "resets", "kills", "spares", "deaths", "level"] or None:
+        if leaderboard not in [
+            "gold",
+            "exp",
+            "resets",
+            "kills",
+            "spares",
+            "deaths",
+            "level",
+        ] or None:
             embed = disnake.Embed(
                 title=f"There is no such leaderboard as **{leaderboard}**",
-
                 description="""
                 You can choose from the following leaderboards:
                 **gold, exp, resets, kills, spares, deaths, level**
                 """,
                 color=BLUE,
             )
-            embed.set_thumbnail(
-                url="attachment://trophy.png"
-            )
+            embed.set_thumbnail(url="attachment://trophy.png")
             return await inter.send(file=file, embed=embed)
 
         data = self.bot.players.find().limit(10).sort(leaderboard, -1)
@@ -1018,17 +1135,18 @@ class Explore(commands.Cog):
         output = [""]
         for i, user in enumerate(users, 1):
             player = await self.bot.fetch_user(user["_id"])
+            rank_display = i
             if i == 1:
-                i = ":medal:"
-            if i == 2:
-                i = ":second_place:"
-            if i == 3:
-                i = ":third_place:"
+                rank_display = ":medal:"
+            elif i == 2:
+                rank_display = ":second_place:"
+            elif i == 3:
+                rank_display = ":third_place:"
 
             if len(str(player)) >= 24:
                 player = str(player)[:-10]
             output.append(
-                f"**{i}. {player}:** {user[leaderboard]} {leaderboard}\n"    #f"**{i}. {str(player)}:** {humanize.intcomma(int(user[leaderboard]))} {leaderboard}\n"
+                f"**{rank_display}. {player}:** {user[leaderboard]} {leaderboard}\n"
             )
             if i == 10:
                 break
@@ -1036,15 +1154,11 @@ class Explore(commands.Cog):
         result = "".join(output)
         embed = disnake.Embed(
             title=f"{leaderboard} Leaderboard:",
-            description=f"{result}",
+            description=result,
             color=BLUE,
         )
-        embed.set_image(
-            url="attachment://leaderboard.png"
-        )
-        embed.set_thumbnail(
-            url="attachment://trophy.png"
-        )
+        embed.set_image(url="attachment://leaderboard.png")
+        embed.set_thumbnail(url="attachment://trophy.png")
         await inter.send(files=[file, file_2], embed=embed)
 
 
