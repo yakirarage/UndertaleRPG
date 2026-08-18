@@ -76,11 +76,12 @@ async def create_player_info(
         "deaths": 0,
         "spares": 0,
         # crates data
-        "standard-crate": 1,
-        "determination-crate": 1,
-        "soul-crate": 0,
-        "void-crate": 0,
-        "event-crate": 0,
+        # "standard-crate": 1,
+        # "determination-crate": 1,
+        # "soul-crate": 0,
+        # "void-crate": 0,
+        # "event-crate": 0,
+        "crates": {"ordinary_crate": 1, "unusual_crate": 0, "strange_crate": 0, "mysterious_crate": 0, "legendary_crate": 0},
         # fight stats
         "in_fight": False,
         "fight_monster": "",

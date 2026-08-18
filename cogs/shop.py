@@ -11,6 +11,8 @@ from utility.constants import BLUE,GOLD
 from utility.dataIO import fileIO
 from utility.utils import create_player_info, in_battle
 
+from functions.crates import get_crates
+
 
 class Loading(disnake.ui.View):
     def __init__(self):
@@ -499,88 +501,94 @@ class Shop(commands.Cog):
         )
         await inter.send(embed=embed, view=view)
 
-    @commands.slash_command()
-    @commands.cooldown(1, 12, commands.BucketType.user)
-    async def crates(self, inter: disnake.ApplicationCommandInteraction):
-        """Open your crates!"""
-        file = disnake.File("./images/crates/standard-crate.png", filename="inventory.png")
+    # @commands.slash_command()
+    # @commands.cooldown(1, 12, commands.BucketType.user)
+    # async def crates(self, inter: disnake.ApplicationCommandInteraction):
+    #     """Open your crates!"""
+    #     file = disnake.File("./images/crates/standard-crate.png", filename="inventory.png")
+    #     await create_player_info(inter, inter.author)
+    #     data = await inter.bot.players.find_one({"_id": inter.author.id})
+    #     standard = data["standard-crate"]
+    #     determin = data["determination-crate"]
+    #     soul = data["soul-crate"]
+    #     void = data["void-crate"]
+    #     event = data["event-crate"]
+    #     inv = data["inventory"]
+    #     embed = disnake.Embed(
+    #         title="Your crates",
+    #         description="You can earn crates by exploring, voting, resets, defeating bosses or in events.",
+    #         color=BLUE,
+    #     )
+    #     embed.set_thumbnail(
+    #         url="https://media.discordapp.net/attachments/900274624594575361/1024789274840813568/Untitled379_202209282004321.png"
+    #     )
+    #     embed.add_field(
+    #         name="Your boxes",
+    #         value=f"""
+    #             (Voting) **Standard crates:** `{standard}`
+    #             (Explore) **Determination crates:** `{determin}`
+    #             (Bosses) **Soul crates:** `{soul}`
+    #             (Resets) **Void crates:** `{void}`
+    #             (Events) **Event crates:** `{event}`
+    #         """,
+    #     )
+
+    #     view = Cratesbtn()
+    #     await inter.send(view=view, embed=embed, ephemeral=True)
+
+    #     await view.wait()
+    #     if view.value is None:
+    #         return await inter.edit_original_message("You took to long to reply!")
+
+    #     crates = fileIO("data/crates.json", "load")
+    #     image = disnake.File(f"./images/crates/{view.value}.png", filename=f"{view.value}.png")
+    #     if data[view.value] <= 0:
+    #         return await inter.edit_original_message(
+    #             content=f"You don't have any **{view.value}**",
+    #             embed=None,
+    #             components=[],
+    #         )
+
+    #     data[view.value] -= 1
+    #     earned_gold = crates[view.value]["gold"] * data["multi_g"]
+    #     loot = crates[view.value]["loot"]
+    #     selected_loot = random.choice(loot)
+
+    #     new_inv = []
+    #     new_inv.append(selected_loot)
+    #     for i in inv:
+    #         new_inv.append(i)
+    #     gold = data["gold"] + earned_gold
+
+    #     info = {"gold": gold, view.value: data[view.value], "inventory": new_inv}
+    #     await inter.bot.players.update_one({"_id": inter.author.id}, {"$set": info})
+
+    #     await inter.edit_original_message(
+    #         content=f"You are opening a **{view.value}**...",
+    #         embed=None,
+    #         components=[],
+    #     )
+
+    #     embed = disnake.Embed(
+    #         title=f"You opened a {view.value}!",
+    #         color=BLUE,
+    #         description=f"""
+    #             You found the following inside the crate.
+
+    #             **Gold:** {round(earned_gold)} {GOLD}
+    #             **Item:** {selected_loot.replace("_", " ")}
+    #         """,
+    #     )
+    #     embed.set_thumbnail(url=f"attachment://{view.value}.png")
+
+    #     await asyncio.sleep(2)
+    #     await inter.edit_original_message(file=image, content=None, embed=embed)
+
+    @commands.slash_command(name="crates", description="view or open your crates!")
+    async def crates(self, inter):
         await create_player_info(inter, inter.author)
-        data = await inter.bot.players.find_one({"_id": inter.author.id})
-        standard = data["standard-crate"]
-        determin = data["determination-crate"]
-        soul = data["soul-crate"]
-        void = data["void-crate"]
-        event = data["event-crate"]
-        inv = data["inventory"]
-        embed = disnake.Embed(
-            title="Your crates",
-            description="You can earn crates by exploring, voting, resets, defeating bosses or in events.",
-            color=BLUE,
-        )
-        embed.set_thumbnail(
-            url="https://media.discordapp.net/attachments/900274624594575361/1024789274840813568/Untitled379_202209282004321.png"
-        )
-        embed.add_field(
-            name="Your boxes",
-            value=f"""
-                (Voting) **Standard crates:** `{standard}`
-                (Explore) **Determination crates:** `{determin}`
-                (Bosses) **Soul crates:** `{soul}`
-                (Resets) **Void crates:** `{void}`
-                (Events) **Event crates:** `{event}`
-            """,
-        )
-
-        view = Cratesbtn()
-        await inter.send(view=view, embed=embed, ephemeral=True)
-
-        await view.wait()
-        if view.value is None:
-            return await inter.edit_original_message("You took to long to reply!")
-
-        crates = fileIO("data/crates.json", "load")
-        image = disnake.File(f"./images/crates/{view.value}.png", filename=f"{view.value}.png")
-        if data[view.value] <= 0:
-            return await inter.edit_original_message(
-                content=f"You don't have any **{view.value}**",
-                embed=None,
-                components=[],
-            )
-
-        data[view.value] -= 1
-        earned_gold = crates[view.value]["gold"] * data["multi_g"]
-        loot = crates[view.value]["loot"]
-        selected_loot = random.choice(loot)
-
-        new_inv = []
-        new_inv.append(selected_loot)
-        for i in inv:
-            new_inv.append(i)
-        gold = data["gold"] + earned_gold
-
-        info = {"gold": gold, view.value: data[view.value], "inventory": new_inv}
-        await inter.bot.players.update_one({"_id": inter.author.id}, {"$set": info})
-
-        await inter.edit_original_message(
-            content=f"You are opening a **{view.value}**...",
-            embed=None,
-            components=[],
-        )
-
-        embed = disnake.Embed(
-            title=f"You opened a {view.value}!",
-            color=BLUE,
-            description=f"""
-                You found the following inside the crate.
-
-                **Gold:** {round(earned_gold)} {GOLD}
-                **Item:** {selected_loot.replace("_", " ")}
-            """,
-        )
-        embed.set_thumbnail(url=f"attachment://{view.value}.png")
-
-        await asyncio.sleep(2)
-        await inter.edit_original_message(file=image, content=None, embed=embed)
+        await get_crates(inter, inter.author)
+        return
 
     @commands.slash_command()
     @commands.cooldown(1, 12, commands.BucketType.user)
